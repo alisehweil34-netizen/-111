@@ -1,0 +1,78 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "answerKeys": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": { ".validate": "newData.isString() && newData.val().length < 100000" }
+    },
+
+    "teachers": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": { ".validate": "newData.isString() && newData.val().length < 100000" }
+    },
+
+    "exams": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": { ".validate": "newData.isString() && newData.val().length < 100000" }
+    },
+
+    "questions": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": { ".validate": "newData.isString() && newData.val().length < 100000" }
+    },
+
+    "students": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.isString() && newData.val().length < 5000"
+      }
+    },
+
+    "attempts": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": {
+        ".read": "auth != null && $id.endsWith('_' + auth.uid)",
+        ".write": "auth != null && $id.endsWith('_' + auth.uid)",
+        ".validate": "newData.isString() && newData.val().length < 20000"
+      }
+    },
+
+    "answers": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": {
+        ".read": "auth != null && $id.contains('_' + auth.uid + '_')",
+        ".write": "auth != null && $id.contains('_' + auth.uid + '_')",
+        ".validate": "newData.isString() && newData.val().length < 50000"
+      }
+    },
+
+    "grades": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": {
+        ".read": "auth != null && $id.endsWith('_' + auth.uid)",
+        ".validate": "newData.isString() && newData.val().length < 100000"
+      }
+    },
+
+    "violations": {
+      ".read": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      ".write": "auth != null && auth.uid === 'PmKWYrs2Dof2Wn9zQ0Rr1YtkohI2'",
+      "$id": {
+        ".write": "auth != null && $id.contains('_' + auth.uid + '_')",
+        ".validate": "newData.isString() && newData.val().length < 5000"
+      }
+    }
+  }
+}
