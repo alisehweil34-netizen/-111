@@ -95,20 +95,16 @@ function guardTeacherPage(onReady) {
   if (!t) { window.location.href = "teacher-login.html"; return; }
   onReady({ uid: t.uid, email: t.email, name: getTeacherDisplayName() });
 }
-/* ---------- هوية الجهاز (تُخزَّن في 3 أماكن حتى لا يكفي مسح واحد منها) ---------- */
-const DEVICE_COOKIE = "exam_device_id";
-
-function _cookieGet(name) {
-  try {
-    const row = document.cookie.split("; ").find((r) => r.startsWith(name + "="));
-    return row ? decodeURIComponent(row.slice(name.length + 1)) : null;
-  } catch { return null; }
-}
-function _cookieSet(name, value) {
-  try {
-    document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${60 * 60 * 24 * 365 * 3}; path=/; SameSite=Strict${location.protocol === "https:" ? "; Secure" : ""}`;
-  } catch {}
-}
+/* ---------- هوية الجهاز (تُخزَّن في مكانين حتى لا يكفي مسح واحد منهما) ----------
+   ملاحظة أمنية: كانت هذه الهوية (ومعها رمز تحديث الطالب طويل الأمد) تُخزَّن
+   سابقًا في Cookie أيضًا. أي Cookie ينشئها JavaScript (document.cookie) لا يمكن
+   أن تكون HttpOnly، أي أن أي كود JS يعمل على نفس الأصل (بما فيه كود مصاب عبر
+   XSS) يستطيع قراءتها. حذفنا هذا التخزين في الـCookie؛ التخزينان المتبقيان
+   (localStorage وIndexedDB) يعانيان من نفس القابلية للقراءة عبر JS من حيث
+   المبدأ (فهذا موقع ثابت بلا خادم خاص)، لكن إزالة الـCookie تقلّل عدد الأماكن
+   المكشوفة ومدة بقاء النسخة (الـCookie كانت تبقى 3 سنوات بصرف النظر عن أي
+   تسجيل خروج). الحماية الكاملة من سرقة الجلسة تتطلب خادمًا يدير الجلسة عبر
+   Cookie بصفة HttpOnly، وهو ما لا يوفره موقع ثابت. */
 function _idbOpen() {
   return new Promise((resolve, reject) => {
     if (!window.indexedDB) return reject(new Error("no-idb"));
@@ -172,7 +168,6 @@ async function _ensureStudentSession() {
 
   let blob = null;
   try { blob = _parseStudentBlob(localStorage.getItem(STUDENT_SESSION_KEY)); } catch {}
-  if (!blob) blob = _parseStudentBlob(_cookieGet(DEVICE_COOKIE));
   if (!blob) blob = _parseStudentBlob(await _withTimeout(_idbGet(STUDENT_SESSION_KEY), 1500));
 
   let tok = null;
@@ -193,7 +188,6 @@ async function _ensureStudentSession() {
   _studentTok.uid = tok.uid; _studentTok.idToken = tok.idToken; _studentTok.expiresAt = tok.expiresAt;
   const saved = JSON.stringify({ uid: tok.uid, rt: tok.rt });
   try { localStorage.setItem(STUDENT_SESSION_KEY, saved); } catch {}
-  _cookieSet(DEVICE_COOKIE, saved);
   await _withTimeout(_idbSet(STUDENT_SESSION_KEY, saved), 1500);
   auth.currentUser = { uid: tok.uid, isAnonymous: true };
   return { uid: tok.uid, isAnonymous: true };

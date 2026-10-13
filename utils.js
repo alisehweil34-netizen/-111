@@ -32,6 +32,14 @@ function translateError(error) {
   return map[code] || error?.message || "حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.";
 }
 
+/** يسجّل خطأً في console لأغراض التشخيص دون طباعة نص استجابة الخادم الخام
+ * (مثل حقل err.raw أو نص الاستجابة الكامل)، حتى لا تظهر تفاصيل تقنية غير
+ * لازمة في console المتصفح لدى الطالب أو الأستاذ. */
+function logError(label, err) {
+  const code = (err && err.code) || (err && err.name) || "unknown-error";
+  console.error(label, code);
+}
+
 /** تنسيق قاعدة البيانات المحلية Timestamp أو Date إلى نص عربي مقروء */
 function formatDateTime(value) {
   if (!value) return "—";

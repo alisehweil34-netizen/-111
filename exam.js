@@ -86,7 +86,7 @@ function showSubmitted(message) {
 
     const [studentDoc, examDoc] = await Promise.all([
       db.collection(COLLECTIONS.STUDENTS).doc(state.uid).get(),
-      db.collection(COLLECTIONS.EXAMS).doc(state.examId).get(),
+      db.collection(COLLECTIONS.EXAMS_PUBLIC).doc(state.examId).get(),
     ]);
 
     if (!studentDoc.exists) {
@@ -185,13 +185,13 @@ function showSubmitted(message) {
     els.loading.classList.add("hidden");
     els.shell.classList.remove("hidden");
   } catch (err) {
-    console.error(err);
+    logError("exam.js", err);
     showBlocked("حدث خطأ", translateError(err));
   }
 })();
 
 async function computeMaxScore(examId) {
-  const qSnap = await db.collection(COLLECTIONS.QUESTIONS).where("examId", "==", examId).get();
+  const qSnap = await db.collection(COLLECTIONS.QUESTIONS_PUBLIC).where("examId", "==", examId).get();
   let total = 0;
   qSnap.forEach((doc) => (total += Number(doc.data().points) || 0));
   return total;
@@ -199,7 +199,7 @@ async function computeMaxScore(examId) {
 
 async function loadQuestionsAndAnswers() {
   const qSnap = await db
-    .collection(COLLECTIONS.QUESTIONS)
+    .collection(COLLECTIONS.QUESTIONS_PUBLIC)
     .where("examId", "==", state.examId)
     .orderBy("order")
     .get();
@@ -316,7 +316,7 @@ async function saveAnswer(questionId, value) {
     );
     await db.collection(COLLECTIONS.ATTEMPTS).doc(state.attemptId).update({ lastActivityAt: serverTimestamp() });
   } catch (err) {
-    console.error("فشل حفظ الإجابة", err);
+    logError("فشل حفظ الإجابة", err);
     // لا نوقف الطالب، لكن نعرض تنبيهًا بسيطًا كي يعرف أن الحفظ لم يكتمل
     flashToast("تعذّر حفظ إجابتك الأخيرة، تحقق من اتصال الإنترنت.");
   }
@@ -371,8 +371,13 @@ async function finalizeAttempt(reason) {
       submitReason: reason,
     });
     state.attempt.status = "submitted";
+    // نقفل سجل المحاولة بشكل دائم بعد التسليم (قاعدة قاعدة البيانات تمنع أي
+    // كتابة لاحقة على attempts/{attemptId} بمجرد وجود هذا القفل)، حتى لا
+    // يستطيع عميل خبيث إعادة الحالة إلى in_progress أو تعديل الدرجة/الوقت
+    // بطلب مباشر للخادم يتجاوز واجهة الموقع.
+    try { await db.collection(COLLECTIONS.ATTEMPT_LOCKS).doc(state.attemptId).set(true); } catch {}
   } catch (err) {
-    console.error("فشل تسليم الامتحان", err);
+    logError("فشل تسليم الامتحان", err);
   }
 }
 
@@ -444,7 +449,7 @@ function onReturn() {
   if (rec) {
     rec.ready
       .then(() => rec.ref.update({ durationSec: seconds }))
-      .catch((err) => console.warn("تعذّر تحديث مدة الغياب", err));
+      .catch((err) => logError("تعذّر تحديث مدة الغياب", err));
   }
   flashToast(`تم تسجيل غيابك عن الامتحان لمدة ${seconds} ثانية.`);
 }
@@ -495,7 +500,7 @@ function logViolation(type, extra = {}, { throttle = true } = {}) {
       timestamp: serverTimestamp(),
       ...extra,
     })
-    .catch((err) => console.warn("تعذّر تسجيل المخالفة", err));
+    .catch((err) => logError("تعذّر تسجيل المخالفة", err));
 
   db.collection(COLLECTIONS.ATTEMPTS)
     .doc(state.attemptId)
@@ -503,7 +508,7 @@ function logViolation(type, extra = {}, { throttle = true } = {}) {
       violationCount: localIncrement(1),
       lastActivityAt: serverTimestamp(),
     })
-    .catch((err) => console.warn("تعذّر تحديث عدّاد المخالفات", err));
+    .catch((err) => logError("تعذّر تحديث عدّاد المخالفات", err));
 
   state.violationCount += 1;
   updateViolationBadge();

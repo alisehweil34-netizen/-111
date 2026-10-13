@@ -95,7 +95,7 @@ guardTeacherPage(async (teacher) => {
     document.getElementById("autoGradeBtn").addEventListener("click", runAutoGrade);
     document.getElementById("backToListBtn").addEventListener("click", showListView);
   } catch (err) {
-    console.error(err);
+    logError("results.js", err);
     showAlert(alertBox, translateError(err), "error");
   }
 });
@@ -275,7 +275,7 @@ async function runAutoGrade() {
     renderAttemptsTable();
     showAlert(document.getElementById("alertBox"), "تم تصحيح جميع الأسئلة الموضوعية بنجاح.", "success");
   } catch (err) {
-    console.error(err);
+    logError("results.js", err);
     showAlert(document.getElementById("alertBox"), translateError(err), "error");
   } finally {
     btn.disabled = false;
@@ -365,9 +365,15 @@ function typeLabelAr(type) {
 function formatAnswerForDisplay(question, answer) {
   if (!answer || answer.answerValue === undefined || answer.answerValue === "") return "لم يُجب";
   if (question.type === "multiple_choice") {
-    const letter = answer.answerValue;
-    const text = question.options?.[letter] || "";
-    return `${letter.toUpperCase()} — ${escapeHtml(text)}`;
+    // answerValue يأتي من قاعدة البيانات ويمكن للطالب (عميل خبيث) أن يكتب فيه
+    // أي نص عبر الشبكة مباشرة، وليس بالضرورة أحد مفاتيح الخيارات a..d.
+    // لذلك لا نثق به إطلاقًا: نتحقق أنه مطابق حرفيًا لأحد مفاتيح question.options
+    // قبل استخدامه، ونهرّب كل ما يُعرض عبر innerHTML حتى بعد التحقق.
+    const letter = String(answer.answerValue);
+    const validKeys = Object.keys(question.options || {});
+    if (!validKeys.includes(letter)) return "إجابة غير صالحة";
+    const text = question.options[letter] || "";
+    return `${escapeHtml(letter.toUpperCase())} — ${escapeHtml(text)}`;
   }
   if (question.type === "true_false") {
     return answer.answerValue === "true" ? "True" : "False";
@@ -378,8 +384,12 @@ function formatAnswerForDisplay(question, answer) {
 function formatCorrectAnswer(question, key) {
   if (!key) return "—";
   if (question.type === "multiple_choice") {
-    const letter = key.correctAnswer;
-    return `${letter.toUpperCase()} — ${escapeHtml(question.options?.[letter] || "")}`;
+    // هذا النص يكتبه الأستاذ نفسه عبر لوحة التحكم، لكننا نطبّق نفس التحقق
+    // والتهريب كطبقة حماية إضافية (دفاع متعدد الطبقات) بدل الوثوق بأي مصدر.
+    const letter = String(key.correctAnswer);
+    const validKeys = Object.keys(question.options || {});
+    if (!validKeys.includes(letter)) return "—";
+    return `${escapeHtml(letter.toUpperCase())} — ${escapeHtml(question.options[letter] || "")}`;
   }
   if (question.type === "true_false") {
     return key.correctAnswer === "true" ? "True" : "False";

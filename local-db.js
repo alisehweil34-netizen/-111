@@ -4,10 +4,20 @@ const COLLECTIONS = {
   STUDENTS: "students",
   EXAMS: "exams",
   QUESTIONS: "questions",
+  // نسخ عامة للقراءة فقط (auth != null)، يكتبها الأستاذ فقط عبر syncPublicMirror
+  // في teacher.js، ولا تحتوي إلا على الامتحانات المنشورة/المغلقة فعليًا.
+  // الهدف: لا يستطيع أي طالب (موثّق بحساب مجهول) قراءة مسودات الامتحانات أو
+  // أسئلة امتحانات لم يُنشرها الأستاذ بعد، حتى لو خمّن أو عرف معرّفها.
+  EXAMS_PUBLIC: "examsPublic",
+  QUESTIONS_PUBLIC: "questionsPublic",
   ANSWER_KEYS: "answerKeys",
   ATTEMPTS: "attempts",
   ANSWERS: "answers",
   VIOLATIONS: "violations",
+  // علامة قفل من اتجاه واحد فقط: يكتبها الطالب مرة واحدة عند تسليم محاولته
+  // (قاعدة قاعدة البيانات تمنع أي كتابة لاحقة بمجرد وجودها)، فتمنع تعديل
+  // attempts/{attemptId} بعد التسليم حتى عبر طلب مباشر للخادم.
+  ATTEMPT_LOCKS: "attemptLocks",
   GRADES: "grades", // درجات يكتبها الأستاذ فقط (لا يستطيع الطالب تعديلها)
 };
 
@@ -170,8 +180,9 @@ const _rtdbBackend = {
     try { res = await fetch(this._url(path, token), opts); }
     catch (e) { throw { code: "network", message: "تعذر الاتصال بالخادم. تأكد من الإنترنت." }; }
     if (!res.ok) {
-      // لا نعرض نص الخطأ القادم من الخادم للمستخدم (تجنّب كشف تفاصيل داخلية)
-      console.warn("[db] " + res.status, await res.text().catch(() => ""));
+      // لا نعرض نص الخطأ القادم من الخادم للمستخدم ولا نطبعه في console
+      // (قد يحتوي تفاصيل داخلية غير لازمة؛ يكفي رمز الحالة HTTP للتشخيص)
+      console.warn("[db] request failed, status " + res.status);
       throw { code: res.status === 401 || res.status === 403 ? "permission-denied" : "db-" + res.status,
               message: res.status === 401 || res.status === 403 ? "ليست لديك صلاحية لتنفيذ هذه العملية." : "خطأ في قاعدة البيانات (" + res.status + ")." };
     }

@@ -60,7 +60,7 @@ async function initDashboardPage() {
     tbody.innerHTML = "";
     exams.forEach((exam) => tbody.appendChild(buildExamRow(exam)));
   } catch (err) {
-    console.error(err);
+    logError("teacher.js", err);
     showAlert(alertBox, translateError(err), "error");
   }
 }
@@ -109,6 +109,7 @@ function buildExamRow(exam) {
 function confirmCloseExam(examId) {
   openConfirm("إغلاق الامتحان", "لن يتمكن أي طالب من الدخول لهذا الامتحان بعد إغلاقه. هل تريد المتابعة؟", async () => {
     await db.collection(COLLECTIONS.EXAMS).doc(examId).update({ status: "closed" });
+    await syncPublicMirror(examId);
     location.reload();
   });
 }
@@ -142,6 +143,44 @@ async function deleteExamCascade(examId) {
     }
   }
   await db.collection(COLLECTIONS.EXAMS).doc(examId).delete();
+  await syncPublicMirror(examId); // يزيل النسخة العامة أيضًا لأن الامتحان لم يعد موجودًا
+}
+
+/* ---------------------- مزامنة النسخة العامة (القابلة للقراءة من الطلاب) ----------------------
+   exams و questions الأصليتان صارتا للأستاذ فقط (انظر database.rules.json) حتى لا يستطيع أي
+   طالب موثّق (حتى بحساب مجهول) قراءة امتحانات/أسئلة لم تُنشر بعد. هذه الدالة تنسخ نسخة عامة
+   من الامتحان وأسئلته إلى examsPublic/questionsPublic فقط عندما تكون حالته "published" أو
+   "closed"، وتحذف أي نسخة عامة قديمة غير ذلك (مسودة أو محذوف). استدعها بعد أي تعديل على
+   امتحان أو أسئلته حتى تبقى النسخة العامة مطابقة دائمًا لما يراه الأستاذ. */
+async function syncPublicMirror(examId) {
+  try {
+    const examDoc = await db.collection(COLLECTIONS.EXAMS).doc(examId).get();
+    const oldPublicQSnap = await db.collection(COLLECTIONS.QUESTIONS_PUBLIC).where("examId", "==", examId).get();
+
+    if (!examDoc.exists || !["published", "closed"].includes(examDoc.data().status)) {
+      // مسودة أو محذوف: لا يجوز أن تبقى له أي نسخة عامة مرئية للطلاب
+      const batch = db.batch();
+      batch.delete(db.collection(COLLECTIONS.EXAMS_PUBLIC).doc(examId));
+      oldPublicQSnap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      return;
+    }
+
+    const qSnap = await db.collection(COLLECTIONS.QUESTIONS).where("examId", "==", examId).orderBy("order").get();
+    const currentIds = new Set(qSnap.docs.map((d) => d.id));
+
+    const batch = db.batch();
+    batch.set(db.collection(COLLECTIONS.EXAMS_PUBLIC).doc(examId), examDoc.data());
+    qSnap.docs.forEach((d) => batch.set(db.collection(COLLECTIONS.QUESTIONS_PUBLIC).doc(d.id), d.data()));
+    // احذف من النسخة العامة أي سؤال لم يعد موجودًا في النسخة الخاصة (عُدِّل أو حُذف)
+    oldPublicQSnap.docs.forEach((d) => { if (!currentIds.has(d.id)) batch.delete(d.ref); });
+    await batch.commit();
+  } catch (err) {
+    // لا نوقف عملية الأستاذ بسبب فشل المزامنة، لكن ننبّهه كي يعيد المحاولة
+    // (مثلًا بإعادة فتح الامتحان وحفظه مجددًا) لأن الطلاب يعتمدون على هذه النسخة.
+    logError("فشل مزامنة النسخة العامة للامتحان", err);
+    alert("تعذّر تحديث نسخة الامتحان التي يراها الطلاب. أعد حفظ الامتحان للمحاولة مجددًا.");
+  }
 }
 
 async function batchDelete(refs) {
@@ -168,7 +207,7 @@ function openConfirm(title, message, onConfirm) {
     try {
       await onConfirm();
     } catch (err) {
-      console.error(err);
+      logError("teacher.js", err);
       alert(translateError(err));
       modal.classList.add("hidden");
     }
@@ -339,18 +378,20 @@ function wireExamForm() {
 
       if (examCtx.examId) {
         await db.collection(COLLECTIONS.EXAMS).doc(examCtx.examId).update(payload);
+        await syncPublicMirror(examCtx.examId);
         showAlert(alertBox, "تم حفظ التعديلات بنجاح.", "success");
       } else {
         payload.createdAt = serverTimestamp();
         payload.questionCount = 0;
         const ref = await db.collection(COLLECTIONS.EXAMS).add(payload);
+        await syncPublicMirror(ref.id);
         window.location.href = `create-exam.html?exam=${ref.id}`;
         return;
       }
       saveBtn.disabled = false;
       saveBtn.textContent = "حفظ بيانات الامتحان";
     } catch (err) {
-      console.error(err);
+      logError("teacher.js", err);
       showAlert(alertBox, translateError(err), "error");
       saveBtn.disabled = false;
       saveBtn.textContent = "حفظ بيانات الامتحان";
@@ -427,6 +468,7 @@ async function moveQuestion(index, direction) {
   batch.update(db.collection(COLLECTIONS.QUESTIONS).doc(a.id), { order: b.order });
   batch.update(db.collection(COLLECTIONS.QUESTIONS).doc(b.id), { order: a.order });
   await batch.commit();
+  await syncPublicMirror(examCtx.examId);
   await loadQuestions();
 }
 
@@ -438,6 +480,7 @@ function confirmDeleteQuestion(q) {
     await batch.commit();
     await renumberQuestions();
     await syncQuestionCount();
+    await syncPublicMirror(examCtx.examId);
     await loadQuestions();
   });
 }
@@ -562,9 +605,10 @@ async function saveQuestion() {
 
     closeQuestionModal();
     await syncQuestionCount();
+    await syncPublicMirror(examCtx.examId);
     await loadQuestions();
   } catch (err) {
-    console.error(err);
+    logError("teacher.js", err);
     showAlert(alertEl, translateError(err), "error");
   }
 }
@@ -739,6 +783,7 @@ async function saveBulkQuestions(list) {
   });
   await batch.commit();
   await syncQuestionCount();
+  await syncPublicMirror(examCtx.examId);
   await loadQuestions();
 }
 
@@ -795,7 +840,7 @@ function wireBulkModal() {
       await saveBulkQuestions(parsed);
       modal.classList.add("hidden");
     } catch (err) {
-      console.error(err);
+      logError("teacher.js", err);
       showAlert(alertEl, translateError(err), "error");
       render();
     }

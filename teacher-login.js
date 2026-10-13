@@ -28,7 +28,7 @@
         await teacherLogin(email, password);
         window.location.href = "teacher-dashboard.html";
       } catch (err) {
-        console.error(err);
+        logError("teacher-login.js", err);
         showAlert(alertBox, translateError(err), "error");
         submitBtn.disabled = false;
         btnText.textContent = "تسجيل الدخول";

@@ -60,7 +60,7 @@
       await ensureStudentSession();
 
       const snap = await db
-        .collection(COLLECTIONS.EXAMS)
+        .collection(COLLECTIONS.EXAMS_PUBLIC)
         .where("examCode", "==", examCode)
         .limit(1)
         .get();
@@ -114,7 +114,7 @@
       // يستطيع الأستاذ رصد الأسماء المتشابهة من صفحة النتائج.
       goToExam(examId);
     } catch (err) {
-      console.error(err);
+      logError("student.js", err);
       showAlert(alertBox, translateError(err), "error");
       setLoading(false);
     }
@@ -146,7 +146,7 @@
       });
       await db.collection(COLLECTIONS.ATTEMPTS).doc(attemptId).update({ violationCount: localIncrement(1) });
     } catch (e) {
-      console.warn("تعذّر تسجيل محاولة الدخول بعد التسليم", e);
+      logError("تعذّر تسجيل محاولة الدخول بعد التسليم", e);
     }
   }
 
@@ -175,7 +175,7 @@
 
       const [attemptDoc, examDoc, gradeDoc] = await Promise.all([
         db.collection(COLLECTIONS.ATTEMPTS).doc(attemptId).get(),
-        db.collection(COLLECTIONS.EXAMS).doc(examId).get(),
+        db.collection(COLLECTIONS.EXAMS_PUBLIC).doc(examId).get(),
         db.collection(COLLECTIONS.GRADES).doc(attemptId).get(), // الدرجة يكتبها الأستاذ فقط
       ]);
 
@@ -220,7 +220,7 @@
         ${exam.allowShowAnswers ? `<p class="muted small text-center mt-16">سمح الأستاذ بمشاهدة الإجابات الصحيحة، لكن هذه الميزة تعرض حاليًا الدرجة فقط.</p>` : ""}
       `;
     } catch (err) {
-      console.error(err);
+      logError("student.js", err);
       root.innerHTML = `<div class="alert alert-error">${escapeHtml(translateError(err))}</div>`;
     }
   })();
