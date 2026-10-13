@@ -39,10 +39,20 @@ async function getTeacherIdToken() {
   } catch { sessionStorage.removeItem(TEACHER_TOKEN_KEY); return null; }
 }
 
-/* التوكن الذي يرسله local-db.js مع كل طلب: توكن الأستاذ إن وُجد، وإلا توكن الطالب (المجهول) إن كانت جلسته جاهزة. */
+/* هل الصفحة الحالية صفحة طالب؟ (في صفحات الطالب يجب استعمال توكن الطالب دائمًا،
+   حتى لو كان الأستاذ مسجّلًا الدخول في نفس المتصفح، وإلا يختلف uid التوكن عن uid الطالب
+   فترفض القواعد الكتابة/القراءة ويظهر "ليست لديك صلاحية"). */
+function _isStudentPage() {
+  return /(^|\/)(exam|student-login|student-result)\.html$/.test(window.location.pathname);
+}
+
+/* التوكن الذي يرسله local-db.js مع كل طلب: في صفحات الطالب توكن الطالب (المجهول)،
+   وفي غيرها توكن الأستاذ إن وُجد وإلا توكن الطالب. */
 async function getAuthToken() {
-  const t = await getTeacherIdToken();
-  if (t) return t;
+  if (!_isStudentPage()) {
+    const t = await getTeacherIdToken();
+    if (t) return t;
+  }
   if (_studentTok.idToken) {
     if (Date.now() >= _studentTok.expiresAt - 60000) await ensureStudentSession();
     return _studentTok.idToken;
